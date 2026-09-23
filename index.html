@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Property tour</title>
+<meta name="robots" content="noindex">
+<link rel="stylesheet" href="pannellum.css">
+<style>
+  :root {
+    --ink: #12181f;
+    --glass: rgba(18, 24, 31, 0.62);
+    --glass-hover: rgba(18, 24, 31, 0.82);
+    --line: rgba(255, 255, 255, 0.22);
+    --paper: #ffffff;
+    --font: "Avenir Next", "Segoe UI", system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; background: var(--ink); font-family: var(--font); }
+  body { overflow: hidden; color: var(--paper); }
+
+  #pano { position: fixed; inset: 0; width: 100%; height: 100%; }
+
+  /* Move the viewer's fullscreen button to the top right, out of the way of the title */
+  .pnlm-controls-container { top: calc(env(safe-area-inset-top, 0px) + 12px); left: auto; right: 12px; }
+  .pnlm-panorama-info, .pnlm-about-msg { display: none !important; }
+
+  header {
+    position: fixed; top: 0; left: 0; right: 0; z-index: 5;
+    padding: calc(env(safe-area-inset-top, 0px) + 16px) 20px 28px;
+    pointer-events: none;
+    background: linear-gradient(to bottom, rgba(10, 14, 18, 0.55), rgba(10, 14, 18, 0));
+  }
+  header h1 { text-wrap: balance; margin: 0; font-size: 1.15rem; font-weight: 650; letter-spacing: 0.01em; text-shadow: 0 1px 8px rgba(0,0,0,.45); padding-right: 56px; }
+  header p  { margin: 3px 0 0; font-size: 0.86rem; line-height: 1.45; white-space: pre-line; opacity: 0.85; text-shadow: 0 1px 6px rgba(0,0,0,.45); padding-right: 56px; }
+
+
+  #brand { margin: 0 0 6px; font-size: 0.78rem; font-weight: 650; letter-spacing: 0.06em; text-shadow: 0 1px 6px rgba(0,0,0,.45); opacity: .95; }
+  /* Labels placed inside the 360 photo */
+  .pin { transform: translate(-50%, -50%); }
+  .pin span {
+    display: inline-block; white-space: pre-line; text-align: center; padding: 10px 18px; border-radius: 18px;
+    background: rgba(255,255,255,.94); color: var(--ink);
+    font: 650 0.9rem/1.35 var(--font); letter-spacing: .02em;
+    box-shadow: 0 2px 12px rgba(0,0,0,.35);
+  }
+  .pin.note span { font-weight: 550; background: var(--glass); color: #fff; backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); border: 1px solid var(--line); }
+
+  #hint {
+    position: fixed; left: 50%; z-index: 5;
+    bottom: calc(env(safe-area-inset-bottom, 0px) + 92px);
+    transform: translateX(-50%);
+    padding: 8px 16px; border-radius: 999px;
+    background: var(--glass); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+    font-size: 0.85rem; white-space: nowrap; pointer-events: none;
+    transition: opacity .6s ease;
+  }
+  #hint.gone { opacity: 0; }
+
+  nav {
+    position: fixed; left: 0; right: 0; bottom: 0; z-index: 5;
+    padding: 28px 0 calc(env(safe-area-inset-bottom, 0px) + 14px);
+    background: linear-gradient(to top, rgba(10, 14, 18, 0.6), rgba(10, 14, 18, 0));
+  }
+  #rooms {
+    display: flex; gap: 8px; margin: 0; padding: 0 16px; list-style: none;
+    overflow-x: auto; scroll-snap-type: x proximity; scrollbar-width: none;
+  }
+  #rooms::-webkit-scrollbar { display: none; }
+  /* Center the buttons when they all fit on screen */
+  #rooms::before, #rooms::after { content: ""; margin: auto; }
+
+  #rooms button {
+    flex: none; scroll-snap-align: center;
+    min-height: 46px; padding: 0 20px; white-space: nowrap; border-radius: 999px;
+    border: 1px solid var(--line);
+    background: var(--glass); color: var(--paper);
+    backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+    font: 500 0.95rem/1 var(--font); cursor: pointer;
+    transition: background-color .2s ease, color .2s ease, border-color .2s ease;
+  }
+  #rooms button:hover { background: var(--glass-hover); }
+  #rooms button[aria-current="true"] { background: var(--paper); color: var(--ink); border-color: var(--paper); font-weight: 650; }
+  #rooms button:focus-visible { outline: 3px solid #ffffff; outline-offset: 3px; }
+
+  @media (max-width: 520px) {
+    header h1 { font-size: min(1rem, 4.1vw); padding-right: 44px; }
+    header p { padding-right: 44px; }
+    #hint { bottom: calc(env(safe-area-inset-bottom, 0px) + 88px); }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    * { transition: none !important; }
+  }
+</style>
+</head>
+<body>
+
+<div id="pano"></div>
+
+<header>
+  <div id="brand"></div>
+  <h1 id="title"></h1>
+  <p id="subtitle"></p>
+</header>
+
+<div id="hint">Drag to look around</div>
+
+<nav aria-label="Rooms">
+  <ul id="rooms"></ul>
+</nav>
+
+<noscript><p style="position:fixed;inset:0;display:grid;place-items:center;text-align:center;padding:24px">This tour needs JavaScript. Please open the link in a regular browser.</p></noscript>
+
+<script src="pannellum.js"></script>
+<script>
+/* ==========================================================================
+   EDIT THIS PART ONLY
+   - title / subtitle: shown at the top of the page
+   - brand: your company name (floor label in every room; brandOnTop: true adds it above the title too)
+   - rooms: one line per button, in the order you want them.
+       id:   short name with no spaces (used in the link, e.g. ...#kitchen)
+       name: the text on the button
+       file: the photo file name
+       pins: (optional) text labels in the photo, e.g.
+             pins: [ { pitch: -5, yaw: 40, text: "Marble island" } ]
+             pitch = up/down (-90 floor, 0 eye level, 90 ceiling), yaw = left/right (-180 to 180)
+   ========================================================================== */
+const TOUR = {
+  brand: "Nexspace Realty\nLINE ID: @nexspace",   // logo label on the floor of every room (look straight down). \n = new line. Use "" to hide.
+  brandOnTop: false,          // set to true to also show the brand above the title
+  title: "Nexspace Realty Exclusive at Romm Convent",
+  subtitle: "Type C1 \u00b7 84.81 sqm\n2BR, 2BA\nFloor 8\nFor rent 12 months",   // \n starts a new line
+  rooms: [
+    { id: "living-room",     name: "Living room",     file: "living-room.jpg" },
+    { id: "dining",          name: "Dining",           file: "dining.jpg" },
+    { id: "kitchen",         name: "Kitchen",          file: "kitchen.jpg" },
+    { id: "master-bedroom",  name: "Master bedroom",   file: "master-bedroom.jpg" },
+    { id: "master-bathroom", name: "Master bathroom",  file: "master-bathroom.jpg" },
+    { id: "bedroom-2",       name: "Bedroom 2",        file: "bedroom-2.jpg" },
+    { id: "bathroom-2",      name: "Bathroom 2",       file: "bathroom-2.jpg" }
+  ]
+};
+/* ==========================================================================
+   Nothing below needs editing
+   ========================================================================== */
+
+(function () {
+  var rooms = TOUR.rooms;
+  var ids = rooms.map(function (r) { return r.id; });
+  var reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  document.getElementById("title").textContent = TOUR.title;
+  var brandEl = document.getElementById("brand");
+  if (TOUR.brand && TOUR.brandOnTop) { brandEl.textContent = TOUR.brand; } else { brandEl.remove(); }
+
+  function makePin(div, text) {
+    div.classList.add("pin");
+    var sp = document.createElement("span");
+    sp.textContent = text;
+    div.appendChild(sp);
+  }
+  var sub = document.getElementById("subtitle");
+  if (TOUR.subtitle) { sub.textContent = TOUR.subtitle; } else { sub.remove(); }
+
+  var scenes = {};
+  rooms.forEach(function (r) {
+    var spots = [];
+    if (TOUR.brand) {
+      spots.push({ pitch: -90, yaw: 0, type: "custom", cssClass: "pin brand-pin", createTooltipFunc: makePin, createTooltipArgs: TOUR.brand });
+    }
+    (r.pins || []).forEach(function (p) {
+      spots.push({ pitch: p.pitch, yaw: p.yaw, type: "custom", cssClass: "pin note", createTooltipFunc: makePin, createTooltipArgs: p.text });
+    });
+    scenes[r.id] = { type: "equirectangular", panorama: r.file, yaw: r.yaw || 0, pitch: 0, hfov: r.hfov || 100, hotSpots: spots };
+  });
+
+  var fromHash = location.hash.replace("#", "");
+  var start = ids.indexOf(fromHash) > -1 ? fromHash : ids[0];
+
+  var viewer = pannellum.viewer("pano", {
+    default: {
+      firstScene: start,
+      sceneFadeDuration: 700,
+      autoLoad: true,
+      showZoomCtrl: false,
+      showFullscreenCtrl: true,
+      compass: false,
+      minHfov: 50,
+      maxHfov: 120,
+      autoRotate: reduceMotion ? 0 : -2
+    },
+    scenes: scenes
+  });
+
+  // Build one button per room
+  var list = document.getElementById("rooms");
+  var buttons = {};
+  rooms.forEach(function (r) {
+    var li = document.createElement("li");
+    var b = document.createElement("button");
+    b.type = "button";
+    b.textContent = r.name;
+    b.addEventListener("click", function () {
+      if (viewer.getScene() !== r.id) { viewer.loadScene(r.id); setActive(r.id); }
+    });
+    li.appendChild(b);
+    list.appendChild(li);
+    buttons[r.id] = b;
+  });
+
+  function setActive(id) {
+    ids.forEach(function (k) {
+      if (k === id) { buttons[k].setAttribute("aria-current", "true"); }
+      else { buttons[k].removeAttribute("aria-current"); }
+    });
+    buttons[id].scrollIntoView({ inline: "center", block: "nearest", behavior: reduceMotion ? "auto" : "smooth" });
+    var name = rooms[ids.indexOf(id)].name;
+    document.title = name + " \u2013 " + TOUR.title;
+    try { history.replaceState(null, "", "#" + id); } catch (e) {}
+    // Warm up the next room's photo so switching feels instant
+    var next = rooms[(ids.indexOf(id) + 1) % rooms.length];
+    if (next && next.id !== id) { new Image().src = next.file; }
+  }
+
+  viewer.on("scenechange", setActive);
+  viewer.on("load", function () { setActive(viewer.getScene()); });
+
+  // Hide the hint after the first drag or touch
+  var hint = document.getElementById("hint");
+  function hideHint() { hint.classList.add("gone"); }
+  viewer.on("mousedown", hideHint);
+  viewer.on("touchstart", hideHint);
+  setTimeout(hideHint, 9000);
+
+  // Left/right arrow keys switch rooms on a laptop
+  document.addEventListener("keydown", function (e) {
+    if (e.key !== "ArrowRight" && e.key !== "ArrowLeft") { return; }
+    var i = ids.indexOf(viewer.getScene());
+    var n = e.key === "ArrowRight" ? (i + 1) % ids.length : (i - 1 + ids.length) % ids.length;
+    if (e.shiftKey) { viewer.loadScene(ids[n]); setActive(ids[n]); }
+  });
+})();
+</script>
+</body>
+</html>
